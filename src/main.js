@@ -60,7 +60,7 @@ const config = {
 		topAmplitude: 0.5,
 	},
 	particles: {
-		size: 7,
+		size: 10,
 		speed: 3.5,
 		divergenceFreq: new THREE.Vector2(0.2, 0.2),
 		divergenceAmp: 3,
