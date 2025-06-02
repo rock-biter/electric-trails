@@ -30,7 +30,7 @@ void main() {
   float t = texture(uTrailMap, vUv).r;
   color += vec3(smoothstep(0.,0.5,t)) * vec3(0.01,0.01,0.01);
   color += vec3(smoothstep(0.5,0.7,t)) * vec3(0.2,0.05,0.01);
-  color += vec3(smoothstep(0.7,1.,t)) * vec3(0.8,0.5,0.2);
+  color += vec3(smoothstep(0.7,1.2,t)) * vec3(0.8,0.5,0.2);
 
   color = mix(vec3(gray) * 0.1 + reflection * 0.3, color, t);
 
