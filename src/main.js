@@ -215,7 +215,7 @@ const pane = new Pane()
 	particles
 		.addBinding(config.particles, 'size', {
 			min: 1,
-			max: 10,
+			max: 30,
 			step: 0.01,
 		})
 		.on('change', (ev) => {
@@ -619,10 +619,10 @@ function handleResize() {
 	reflectionCamera.updateProjectionMatrix()
 
 	renderer.setSize(sizes.width, sizes.height)
+	const pixelRatio = Math.min(window.devicePixelRatio, 2)
 	rt1.setSize(sizes.width, sizes.height)
 	rt2.setSize(sizes.width, sizes.height)
-	rt3.setSize(sizes.width, sizes.height)
+	rt3.setSize(sizes.width * pixelRatio, sizes.height * pixelRatio)
 
-	const pixelRatio = Math.min(window.devicePixelRatio, 2)
 	renderer.setPixelRatio(pixelRatio)
 }
