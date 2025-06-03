@@ -6,6 +6,16 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { Pane } from 'tweakpane'
 import trailFragment from './shaders/trail/fragment.glsl'
+import iceVertex from './shaders/ice/vertex.glsl'
+import iceFragment from './shaders/ice/fragment.glsl'
+
+const textureLoader = new THREE.TextureLoader()
+const crackMap = textureLoader.load('/textures/cracks-1.png')
+crackMap.wrapS = THREE.RepeatWrapping
+crackMap.wrapT = THREE.RepeatWrapping
+const perlinMap = textureLoader.load('/textures/super-perlin-1.png')
+perlinMap.wrapS = THREE.RepeatWrapping
+perlinMap.wrapT = THREE.RepeatWrapping
 
 const raycaster = new THREE.Raycaster()
 
@@ -23,16 +33,6 @@ const pane = new Pane()
  */
 const scene = new THREE.Scene()
 // scene.background = new THREE.Color(0xdedede)
-
-// __floor__
-/**
- * Plane
- */
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 'lightgray' })
-const groundGeometry = new THREE.PlaneGeometry(40, 40, 100, 100)
-groundGeometry.rotateX(-Math.PI * 0.5)
-const ground = new THREE.Mesh(groundGeometry, groundMaterial)
-scene.add(ground)
 
 /**
  * render sizes
@@ -138,6 +138,26 @@ window.addEventListener('pointermove', (ev) => {
 	pointer.y = -(ev.clientY / sizes.height) * 2 + 1
 })
 
+// ice
+// __floor__
+/**
+ * Plane
+ */
+const groundMaterial = new THREE.ShaderMaterial({
+	vertexShader: iceVertex,
+	fragmentShader: iceFragment,
+	uniforms: {
+		uTrailMap: new THREE.Uniform(outputRT.texture),
+		uCracksMap: new THREE.Uniform(crackMap),
+		uPerlin: new THREE.Uniform(perlinMap),
+		uParallaxDistance: new THREE.Uniform(1),
+	},
+})
+const groundGeometry = new THREE.PlaneGeometry(40, 40, 100, 100)
+groundGeometry.rotateX(-Math.PI * 0.5)
+const ground = new THREE.Mesh(groundGeometry, groundMaterial)
+scene.add(ground)
+
 handleResize()
 
 /**
@@ -184,7 +204,7 @@ function tic() {
 	renderer.setRenderTarget(null)
 
 	trailMaterial.uniforms.uMap.value = outputRT.texture
-	groundMaterial.map = outputRT.texture
+	groundMaterial.uniforms.uTrailMap.value = outputRT.texture
 
 	renderer.render(scene, camera)
 

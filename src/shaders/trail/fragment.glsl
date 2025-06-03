@@ -40,6 +40,7 @@ void main() {
 
   float t = smoothstep(0.08,0.03,d);
   vec3 color = mix(mapColor, vec3(1.0), t);
+  color = clamp(color,0.0,1.0);
 
   gl_FragColor = vec4(color, 1.0);
 
