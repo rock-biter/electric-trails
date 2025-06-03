@@ -67,6 +67,7 @@ const config = {
 	},
 }
 const pane = new Pane()
+const cameraTarget = new THREE.Vector3(0, 0, 0)
 
 {
 	const fire = pane.addFolder({ title: 'Fire', expanded: false })
@@ -279,8 +280,8 @@ const sizes = {
  */
 const fov = 60
 const camera = new THREE.PerspectiveCamera(fov, sizes.width / sizes.height, 0.1)
-camera.position.set(20, 12, 20)
-camera.lookAt(new THREE.Vector3(0, 2.5, 0))
+camera.position.set(20, 12, 22)
+camera.lookAt(cameraTarget)
 
 /**
  * Show the axes of coordinates system
@@ -301,8 +302,11 @@ document.body.appendChild(renderer.domElement)
  * OrbitControls
  */
 // __controls__
-const controls = new OrbitControls(camera, renderer.domElement)
-controls.enableDamping = true
+let controls
+if (window.innerWidth >= 992) {
+	controls = new OrbitControls(camera, renderer.domElement)
+	controls.enableDamping = true
+}
 
 /**
  * Lights
@@ -563,7 +567,9 @@ function tic() {
 	trailMaterial.uniforms.uDt.value = dt
 
 	// __controls_update__
-	controls.update(dt)
+	if (window.innerWidth >= 992) {
+		controls.update(dt)
+	}
 
 	// render trail
 	renderer.setRenderTarget(outputRT)
@@ -579,7 +585,10 @@ function tic() {
 	// render reflection
 	reflectionCamera.position.copy(camera.position)
 	reflectionCamera.position.y *= -1
-	const target = controls.target.clone()
+	let target = controls && controls.target.clone()
+	if (!target) {
+		target = cameraTarget
+	}
 	target.y *= -1
 	reflectionCamera.lookAt(target)
 
