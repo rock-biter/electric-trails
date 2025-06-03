@@ -17,12 +17,19 @@ void main() {
   vec3 colorDeepBlue = vec3(0.0,0.01,0.03);
   vec3 colorGreen = vec3(0.1,0.2,0.35);
 
+  float accumulateFrosted = 0.;
+
   for (int i = 0; i < 50; i++) {
-    float aplitude = float(60 - i) / 1.;
-    cracks += (1. - texture(uCracksMap, vUv * 4. + vParallax * 0.002 * float(i + 1)).r) * aplitude;
+    float aplitude = float(70 - i) / 1.;
+    vec2 uv = vUv * 4. + vParallax * 0.002 * float(i + 1);
+
+    cracks += (1. - texture(uCracksMap, uv ).r) * aplitude;
     nomalization += aplitude;
+
+    accumulateFrosted += texture(uTrailMap, vUv + vParallax * 0.001 * float(i + 1)).r * aplitude;
   }
   cracks /= nomalization;
+  accumulateFrosted /= nomalization;
   cracks += pow(1. - texture(uCracksMap, vUv * 4.).r, 3.) * 3.;
   
   vec3 cracksParallax = texture(uCracksMap, vUv * 2. + vParallax * 0.1).rgb;
@@ -42,7 +49,9 @@ void main() {
   
   cracksColor = mix(cracksColor, prxCracksColor, 0.3);
 
-  vec3 color = mix(cracksColor, frosted, pow(trail.r,0.5));
+  // vec3 color = mix(cracksColor, frosted, pow(trail.r,0.5));
+  cracksColor = mix(cracksColor, vec3(0.1,0.7,0.7), pow(accumulateFrosted,1.5));
+  vec3 color = mix(cracksColor, frosted, pow(trail.r,0.5) );
   // color = mix( color, colorBlue * frosted, pow(trail.r,3.));
 
 

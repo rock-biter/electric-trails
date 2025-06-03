@@ -153,7 +153,7 @@ const groundMaterial = new THREE.ShaderMaterial({
 		uParallaxDistance: new THREE.Uniform(1),
 	},
 })
-const groundGeometry = new THREE.PlaneGeometry(40, 40, 100, 100)
+const groundGeometry = new THREE.PlaneGeometry(40, 40)
 groundGeometry.rotateX(-Math.PI * 0.5)
 const ground = new THREE.Mesh(groundGeometry, groundMaterial)
 scene.add(ground)
