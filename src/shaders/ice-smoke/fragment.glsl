@@ -37,6 +37,9 @@ void main() {
   color += g;//* smoothstep(0., 0.3,trail.r);
 
   // a += g * a;
+  vec2 uv = vUv - 0.5;
+  uv *= 2.0;
+  color = mix(color, vec3(0.0, 0.01, 0.02), smoothstep(0.4,1.,length(pow(abs(uv), vec2(1.)))));
 
   gl_FragColor = vec4(color,clamp(a * 1., 0., 0.3));
 

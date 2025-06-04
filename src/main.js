@@ -35,7 +35,7 @@ const pane = new Pane()
  * Scene
  */
 const scene = new THREE.Scene()
-// scene.background = new THREE.Color(0xdedede)
+scene.background = new THREE.Color(0.0, 0.01, 0.02)
 
 /**
  * render sizes
@@ -57,8 +57,8 @@ camera.lookAt(new THREE.Vector3(0, 2.5, 0))
  * Show the axes of coordinates system
  */
 // __helper_axes__
-const axesHelper = new THREE.AxesHelper(3)
-scene.add(axesHelper)
+// const axesHelper = new THREE.AxesHelper(3)
+// scene.add(axesHelper)
 
 /**
  * renderer

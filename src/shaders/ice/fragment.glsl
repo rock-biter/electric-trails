@@ -62,6 +62,9 @@ void main() {
   vec3 color = mix(cracksColor, frosted, pow(trail.r,0.5) );
   // color = mix( color, colorBlue * frosted, pow(trail.r,3.));
 
+  vec2 uv = vUv - 0.5;
+  uv *= 2.0;
+  color = mix(color, vec3(0.0, 0.01, 0.02), smoothstep(0.2,1.,length(pow(abs(uv), vec2(1.)))));
 
   gl_FragColor = vec4(color,1.);
 
