@@ -6,8 +6,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { Pane } from 'tweakpane'
 import trailFragment from './shaders/trail/fragment.glsl'
+import trailSmokeFragment from './shaders/smoke/fragment.glsl'
 import iceVertex from './shaders/ice/vertex.glsl'
 import iceFragment from './shaders/ice/fragment.glsl'
+import smokeVertex from './shaders/ice-smoke/vertex.glsl'
+import smokeFragment from './shaders/ice-smoke/fragment.glsl'
 
 const textureLoader = new THREE.TextureLoader()
 const crackMap = textureLoader.load('/textures/cracks-1.png')
@@ -80,8 +83,8 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 4.5)
 directionalLight.position.set(3, 10, 7)
 scene.add(ambientLight, directionalLight)
 
-function createRenderTarget() {
-	return new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
+function createRenderTarget(w, h) {
+	return new THREE.WebGLRenderTarget(w, h, {
 		type: THREE.HalfFloatType,
 		minFilter: THREE.LinearFilter,
 		magFilter: THREE.LinearFilter,
@@ -89,11 +92,17 @@ function createRenderTarget() {
 	})
 }
 
-const rt1 = createRenderTarget()
-const rt2 = createRenderTarget()
+const rt1 = createRenderTarget(sizes.width, sizes.height)
+const rt2 = createRenderTarget(sizes.width, sizes.height)
 
 let inputRT = rt1
 let outputRT = rt2
+
+const rt3 = createRenderTarget(sizes.width * 0.25, sizes.height * 0.25)
+const rt4 = createRenderTarget(sizes.width * 0.25, sizes.height * 0.25)
+
+let smokeInputRT = rt3
+let smokeOutputRT = rt4
 
 const trailScene = new THREE.Scene()
 const trailGeometry = new THREE.BufferGeometry()
@@ -121,7 +130,7 @@ const trailMaterial = new THREE.ShaderMaterial({
 		uResolution: new THREE.Uniform(
 			new THREE.Vector2(sizes.width, sizes.height)
 		),
-		uMap: new THREE.Uniform(outputRT.texture),
+		uMap: new THREE.Uniform(),
 		uUVPointer: new THREE.Uniform(new THREE.Vector2(0, 0)),
 		uDt: new THREE.Uniform(0.0),
 		uSpeed: new THREE.Uniform(0),
@@ -131,6 +140,30 @@ const trailMaterial = new THREE.ShaderMaterial({
 
 const trailMesh = new THREE.Mesh(trailGeometry, trailMaterial)
 trailScene.add(trailMesh)
+
+const trailSmokeMaterial = new THREE.ShaderMaterial({
+	vertexShader: /* glsl */ `
+		varying vec2 vUv;	
+		void main() {
+			vUv = uv;
+			gl_Position = vec4(position,1.0);
+		}
+	`,
+	fragmentShader: trailSmokeFragment,
+	uniforms: {
+		uResolution: {
+			value: new THREE.Vector2(sizes.width * 0.25, sizes.height * 0.25),
+		},
+		uMap: new THREE.Uniform(),
+		uUVPointer: trailMaterial.uniforms.uUVPointer,
+		uDt: trailMaterial.uniforms.uDt,
+		uSpeed: trailMaterial.uniforms.uSpeed,
+		uTime: trailMaterial.uniforms.uTime,
+	},
+})
+const trailSmokeMesh = new THREE.Mesh(trailGeometry, trailSmokeMaterial)
+const trailSmokeScene = new THREE.Scene()
+trailSmokeScene.add(trailSmokeMesh)
 
 const pointer = new THREE.Vector2()
 window.addEventListener('pointermove', (ev) => {
@@ -146,8 +179,9 @@ window.addEventListener('pointermove', (ev) => {
 const groundMaterial = new THREE.ShaderMaterial({
 	vertexShader: iceVertex,
 	fragmentShader: iceFragment,
+	transparent: true,
 	uniforms: {
-		uTrailMap: new THREE.Uniform(outputRT.texture),
+		uTrailMap: new THREE.Uniform(),
 		uCracksMap: new THREE.Uniform(crackMap),
 		uPerlin: new THREE.Uniform(perlinMap),
 		uParallaxDistance: new THREE.Uniform(1),
@@ -157,6 +191,23 @@ const groundGeometry = new THREE.PlaneGeometry(40, 40)
 groundGeometry.rotateX(-Math.PI * 0.5)
 const ground = new THREE.Mesh(groundGeometry, groundMaterial)
 scene.add(ground)
+
+const iceSmokeGeometry = new THREE.PlaneGeometry(40, 40, 100, 100)
+const iceSmokeMaterial = new THREE.ShaderMaterial({
+	vertexShader: smokeVertex,
+	fragmentShader: smokeFragment,
+	transparent: true,
+	// wireframe: true,
+	uniforms: {
+		uTrailSmokeMap: new THREE.Uniform(),
+		uPerlin: new THREE.Uniform(perlinMap),
+		uTime: trailMaterial.uniforms.uTime,
+	},
+})
+iceSmokeGeometry.rotateX(-Math.PI * 0.5)
+const smokeMesh = new THREE.Mesh(iceSmokeGeometry, iceSmokeMaterial)
+smokeMesh.position.y = 0.5
+scene.add(smokeMesh)
 
 handleResize()
 
@@ -201,16 +252,26 @@ function tic() {
 	renderer.setRenderTarget(outputRT)
 	renderer.render(trailScene, camera)
 
+	renderer.setRenderTarget(smokeOutputRT)
+	renderer.render(trailSmokeScene, camera)
+
 	renderer.setRenderTarget(null)
 
 	trailMaterial.uniforms.uMap.value = outputRT.texture
-	groundMaterial.uniforms.uTrailMap.value = outputRT.texture
+	groundMaterial.uniforms.uTrailMap.value = inputRT.texture
+
+	trailSmokeMaterial.uniforms.uMap.value = smokeOutputRT.texture
+	iceSmokeMaterial.uniforms.uTrailSmokeMap.value = smokeOutputRT.texture
 
 	renderer.render(scene, camera)
 
-	const temp = inputRT
+	let temp = inputRT
 	inputRT = outputRT
 	outputRT = temp
+
+	temp = smokeInputRT
+	smokeInputRT = smokeOutputRT
+	smokeOutputRT = temp
 
 	requestAnimationFrame(tic)
 }
@@ -225,6 +286,10 @@ function handleResize() {
 
 	camera.aspect = sizes.width / sizes.height
 	trailMaterial.uniforms.uResolution.value.set(sizes.width, sizes.height)
+	trailSmokeMaterial.uniforms.uResolution.value.set(
+		sizes.width * 0.25,
+		sizes.height * 0.25
+	)
 
 	// camera.aspect = sizes.width / sizes.height;
 	camera.updateProjectionMatrix()
@@ -232,6 +297,8 @@ function handleResize() {
 	renderer.setSize(sizes.width, sizes.height)
 	rt1.setSize(sizes.width, sizes.height)
 	rt2.setSize(sizes.width, sizes.height)
+	rt3.setSize(sizes.width * 0.25, sizes.height * 0.25)
+	rt4.setSize(sizes.width * 0.25, sizes.height * 0.25)
 
 	const pixelRatio = Math.min(window.devicePixelRatio, 2)
 	renderer.setPixelRatio(pixelRatio)
