@@ -43,19 +43,19 @@ const config = {
 	cursorSize: 1.2,
 }
 const pane = new Pane()
-pane.addBinding(config, 'color', {
-	color: { type: 'float' },
-})
+// pane.addBinding(config, 'color', {
+// 	color: { type: 'float' },
+// })
 
-pane
-	.addBinding(config, 'colorDistance', {
-		min: 0,
-		max: 10,
-		step: 0.01,
-	})
-	.on('change', (ev) => {
-		godrayPassMaterial.uniforms.uColorDistance.value = ev.value
-	})
+// pane
+// 	.addBinding(config, 'colorDistance', {
+// 		min: 0,
+// 		max: 10,
+// 		step: 0.01,
+// 	})
+// 	.on('change', (ev) => {
+// 		godrayPassMaterial.uniforms.uColorDistance.value = ev.value
+// 	})
 
 pane
 	.addBinding(config, 'reduce', {
