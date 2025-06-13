@@ -22,6 +22,7 @@ import godrayFragment from './shaders/godray-pass/fragment.glsl'
 import godrayVertex from './shaders/godray-pass/vertex.glsl'
 
 import trailMeshVertex from './shaders/mesh-trail/vertex.glsl'
+import trailMeshFragment from './shaders/mesh-trail/fragment.glsl'
 
 const textureLoader = new THREE.TextureLoader()
 const crackMap = textureLoader.load('/textures/cracks-1.png')
@@ -309,7 +310,7 @@ const godrayPass = new ShaderPass(godrayPassMaterial, 'tDiffuse')
 const clock = new THREE.Clock()
 let time = 0
 
-const subdivision = 128
+const subdivision = 64
 const data = new Float32Array(subdivision * 4)
 
 const dataTexture = new THREE.DataTexture(
@@ -325,17 +326,22 @@ const trailGeom = new THREE.PlaneGeometry(1, 1, 128, 1)
 // trailGeom.rotateX(-Math.PI * 0.5)
 const trailMat = new THREE.ShaderMaterial({
 	vertexShader: trailMeshVertex,
+	fragmentShader: trailMeshFragment,
 	transparent: true,
-	wireframe: true,
+	// wireframe: true,
+	side: THREE.DoubleSide,
+	blending: THREE.AdditiveBlending,
+	depthWrite: false,
 	uniforms: {
 		uTrailTexture: new THREE.Uniform(dataTexture),
+		uTime: new THREE.Uniform(0),
 	},
 	// map: dataTexture,
 })
 const trail = new THREE.Mesh(trailGeom, trailMat)
-trail.position.y = 0.7
+trail.position.y = 1
 trail.frustumCulled = false
-trail.renderOrder = -1
+trail.renderOrder = 2
 scene.add(trail)
 
 const prevPoint = new THREE.Vector3(0)
@@ -358,11 +364,13 @@ function tic() {
 
 	const [firstIntersection] = raycaster.intersectObject(ground)
 
+	trailMat.uniforms.uTime.value = time
+
 	if (firstIntersection) {
 		// console.log(firstIntersection)
 		const { uv, point } = firstIntersection
 
-		uv && trailMaterial.uniforms.uUVPointer.value.lerp(uv, dt * 10)
+		uv && trailMaterial.uniforms.uUVPointer.value.lerp(uv, dt * 5)
 		godrayPassMaterial.uniforms.uCenter.value.lerp(
 			point.add(new THREE.Vector3(0, -2, 0)),
 			dt * 10
@@ -373,34 +381,34 @@ function tic() {
 
 		// console.log(point.sub(prevPoint).length())
 		//prevPoint.sub(newPoint).length() >= 0.3
-		// if (prevPoint.sub(newPoint).length() >= dt * 15) {
-		// console.log('update')
-		for (let i = subdivision; i >= 0; i--) {
-			let prevIndex = (i - 1) * 4
+		if (prevPoint.sub(newPoint).length() >= dt * 1) {
+			// console.log('update')
+			for (let i = subdivision; i >= 0; i--) {
+				let prevIndex = (i - 1) * 4
 
-			const x = data[prevIndex]
-			const y = data[prevIndex + 1]
-			const z = data[prevIndex + 2]
-			const w = data[prevIndex + 3]
+				const x = data[prevIndex]
+				const y = data[prevIndex + 1]
+				const z = data[prevIndex + 2]
+				const w = data[prevIndex + 3]
 
-			let index = i * 4
+				let index = i * 4
 
-			data[index] = x
-			data[index + 1] = y
-			data[index + 2] = z
-			data[index + 3] = w
+				data[index] = x
+				data[index + 1] = y
+				data[index + 2] = z
+				data[index + 3] = w
+			}
+
+			data[0] = newPoint.x //+ Math.sin(time * 2) * 0.1
+			data[0 + 1] = 0
+			data[0 + 2] = newPoint.z //+ Math.cos(time * 2) * 0.1
+			data[0 + 3] = 0
+
+			dataTexture.needsUpdate = true
+
+			// prevPoint.copy(newPoint)
 		}
-
-		data[0] = newPoint.x //+ Math.sin(time * 2) * 0.1
-		data[0 + 1] = 0
-		data[0 + 2] = newPoint.z //+ Math.cos(time * 2) * 0.1
-		data[0 + 3] = 0
-
-		dataTexture.needsUpdate = true
-
-		// prevPoint.copy(newPoint)
 	}
-	// }
 
 	trailMaterial.uniforms.uTime.value = time
 	godrayPassMaterial.uniforms.uTime.value = time
