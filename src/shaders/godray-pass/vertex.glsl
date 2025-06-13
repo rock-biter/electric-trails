@@ -9,7 +9,7 @@ void main() {
 
   vUv = uv;
 
-  vec4 cPosition = uProjectionMatrix * uViewMatrix * vec4(0.0,-100.,0., 1.0);
+  vec4 cPosition = uProjectionMatrix * uViewMatrix * vec4(uCenter, 1.0);
   vCenter.xy = cPosition.xy / cPosition.w;
 
   gl_Position = vec4(position,1.0);

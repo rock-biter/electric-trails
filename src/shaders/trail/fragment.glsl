@@ -12,7 +12,7 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
   vec2 texel = vec2(1.0) / uResolution;
 
-  float texelScale = 0.2;
+  float texelScale = 1.;
   texel *= texelScale;
 
   vec3 mapColor = texture(uMap,uv).rgb;
@@ -29,7 +29,7 @@ void main() {
   // } else {
     mapColor = mapMin;
   // }
-  mapColor *= 1.0 - uDt * 0.5;
+  // mapColor *= 1.0 - uDt * 2.5;
 
   // uv -= 0.5;
   // uv *= 2.0;

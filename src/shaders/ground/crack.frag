@@ -16,7 +16,7 @@ void main() {
   float perlinAnim = snoise(vec3(vUv * 20.,uTime * 0.4));
 
   vec3 trail = texture(uTrailMap, vUv).rgb;
-  float cracksMap = texture(uCracksMap, vUv * 3.).r;
+  float cracksMap = texture(uCracksMap, vUv * 5. + floor(mod(uTime * 13.,200.)) * 265.34865).r;
 
   vec3 dark = vec3(0.0);
 

@@ -21,6 +21,8 @@ import groundCracksFragment from './shaders/ground/crack.frag'
 import godrayFragment from './shaders/godray-pass/fragment.glsl'
 import godrayVertex from './shaders/godray-pass/vertex.glsl'
 
+import trailMeshVertex from './shaders/mesh-trail/vertex.glsl'
+
 const textureLoader = new THREE.TextureLoader()
 const crackMap = textureLoader.load('/textures/cracks-1.png')
 crackMap.wrapS = THREE.RepeatWrapping
@@ -245,7 +247,7 @@ const crackMaterial = new THREE.ShaderMaterial({
 	vertexShader: groundVertex,
 	// fragmentShader: groundFragment,
 	fragmentShader: groundCracksFragment,
-	// transparent: true,
+	transparent: true,
 	uniforms: groundMaterial.uniforms,
 })
 
@@ -298,7 +300,7 @@ const godrayPassMaterial = new THREE.ShaderMaterial({
 
 const godrayPass = new ShaderPass(godrayPassMaterial, 'tDiffuse')
 
-composer.addPass(godrayPass)
+// composer.addPass(godrayPass)
 
 /**
  * Three js Clock
@@ -306,6 +308,37 @@ composer.addPass(godrayPass)
 // __clock__
 const clock = new THREE.Clock()
 let time = 0
+
+const subdivision = 128
+const data = new Float32Array(subdivision * 4)
+
+const dataTexture = new THREE.DataTexture(
+	data,
+	subdivision,
+	1,
+	THREE.RGBAFormat,
+	THREE.FloatType
+)
+
+// elettric trail mash
+const trailGeom = new THREE.PlaneGeometry(1, 1, 128, 1)
+// trailGeom.rotateX(-Math.PI * 0.5)
+const trailMat = new THREE.ShaderMaterial({
+	vertexShader: trailMeshVertex,
+	transparent: true,
+	wireframe: true,
+	uniforms: {
+		uTrailTexture: new THREE.Uniform(dataTexture),
+	},
+	// map: dataTexture,
+})
+const trail = new THREE.Mesh(trailGeom, trailMat)
+trail.position.y = 0.7
+trail.frustumCulled = false
+trail.renderOrder = -1
+scene.add(trail)
+
+const prevPoint = new THREE.Vector3(0)
 
 /**
  * frame loop
@@ -327,10 +360,47 @@ function tic() {
 
 	if (firstIntersection) {
 		// console.log(firstIntersection)
-		const { uv } = firstIntersection
+		const { uv, point } = firstIntersection
 
 		uv && trailMaterial.uniforms.uUVPointer.value.lerp(uv, dt * 10)
+		godrayPassMaterial.uniforms.uCenter.value.lerp(
+			point.add(new THREE.Vector3(0, -2, 0)),
+			dt * 10
+		)
+
+		const prevPoint = new THREE.Vector3(data[0], data[1], data[2])
+		const newPoint = prevPoint.clone().lerp(point, dt * 5)
+
+		// console.log(point.sub(prevPoint).length())
+		//prevPoint.sub(newPoint).length() >= 0.3
+		// if (prevPoint.sub(newPoint).length() >= dt * 15) {
+		// console.log('update')
+		for (let i = subdivision; i >= 0; i--) {
+			let prevIndex = (i - 1) * 4
+
+			const x = data[prevIndex]
+			const y = data[prevIndex + 1]
+			const z = data[prevIndex + 2]
+			const w = data[prevIndex + 3]
+
+			let index = i * 4
+
+			data[index] = x
+			data[index + 1] = y
+			data[index + 2] = z
+			data[index + 3] = w
+		}
+
+		data[0] = newPoint.x //+ Math.sin(time * 2) * 0.1
+		data[0 + 1] = 0
+		data[0 + 2] = newPoint.z //+ Math.cos(time * 2) * 0.1
+		data[0 + 3] = 0
+
+		dataTexture.needsUpdate = true
+
+		// prevPoint.copy(newPoint)
 	}
+	// }
 
 	trailMaterial.uniforms.uTime.value = time
 	godrayPassMaterial.uniforms.uTime.value = time
