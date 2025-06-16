@@ -1,6 +1,7 @@
 uniform float uParallaxDistance;
 
 varying vec2 vParallax;
+varying vec3 vWPosition;
 varying vec2 vUv;
 
 void main() {
@@ -9,6 +10,7 @@ void main() {
 
   vec3 pos = position;
   vec4 wPos = modelMatrix * vec4(pos, 1.0);
+  vWPosition = wPos.xyz;
 
   mat3 tbn = mat3(vec3(1.,0,0), vec3(0,0.,-1.), vec3(0.,1.,0.));
   tbn = transpose(tbn);

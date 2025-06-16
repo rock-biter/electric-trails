@@ -3,15 +3,42 @@
 #include ../simplex.glsl;
 #include ../fbm.glsl;
 
+#include ../cellular.glsl;
+
 uniform sampler2D uCracksMap;
 uniform sampler2D uTrailMap;
 uniform sampler2D uPerlin;
 uniform float uTime;
+uniform sampler2D uReflectionMap;
 
 varying vec2 vParallax;
 varying vec2 vUv;
+varying vec3 vWPosition;
 
 void main() {
+
+  vec2 noiseUV = vec2(
+    cnoise(vWPosition * 0.75 + uTime),
+    cnoise(vWPosition * 0.75 + 200. + uTime)
+  );
+
+  ivec2 iRes = textureSize(uReflectionMap, 0);
+  vec2 reflectUV = gl_FragCoord.xy / (vec2(iRes));
+  reflectUV.y = 1.0 - reflectUV.y;
+  reflectUV += noiseUV * 0.04;
+
+  vec3 reflection = texture( uReflectionMap, reflectUV ).rgb;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.001) ).rgb;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.,0.001)).rgb;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.002)).rgb * 0.5;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.00,0.002)).rgb * 0.5;
+  reflection += texture( uReflectionMap, reflectUV + vec2(-0.001,-0.00)).rgb;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.001,-0.00)).rgb;
+  reflection += texture( uReflectionMap, reflectUV + vec2(0.002,-0.00)).rgb * 0.5;
+  reflection += texture( uReflectionMap, reflectUV + vec2(-0.002,-0.00)).rgb * 0.5;
+
+  reflection /= 8.;
+  reflection = pow(reflection, vec3(2.));
 
   float perlin = texture(uPerlin, vUv * 2.).r;
   float perlinAnim = texture(uPerlin, vUv * 2. + uTime * 0.02).r * 2. - 1.;
@@ -21,7 +48,8 @@ void main() {
 
   float nomalization = 1.0;
 
-  vec3 dark = vec3(0.07,0.07,0.07);
+  vec3 dark = vec3(0.0,0.0,0.);
+  // dark.b += noiseUV.x * 0.05;
   vec3 colorGreen = vec3(1.);
 
   // float accumulateTurb = 0.;
@@ -54,11 +82,11 @@ void main() {
   // trailValue = floor(trailValue * 5.) / 5.;
   float cracks = pow(1. - cracksMap, 7. - trailValue * 4. - perlinAnim * 4. ) * 3. * trailValue;
 
-  vec3 frosted = vec3(1.0,0.1,0.1) * 0.4;
+  // vec3 frosted = vec3(1.0,0.1,0.1) * 0.4;
   vec3 cracksColor = dark;
   // cracksColor += pow(cracks,0.6) * 10. * vec3(1.0,0.1,0.0);
-  cracksColor *= perlin * 10. * dark;
-  cracksColor *= perlin2 * 20. * dark;
+  // cracksColor *= perlin * 10. * dark;
+  // cracksColor *= perlin * dark * 0.;
   // cracksColor += pow(cracks,1.) * 10. * vec3(1.,0.8,0.2);
   // cracksColor += pow(cracks,2.) * 10.;
 
@@ -71,13 +99,17 @@ void main() {
   
   vec3 color = cracksColor; // + turbulence * 0.25;//+ pow(deepColor,vec3(2.));
   // color = mix(color, turbulence * 0.5, pow(accumulateFrosted,1.));
+  color += reflection;
 
   vec2 uv = vUv - 0.5;
   uv *= 2.0;
-  color = mix(color, vec3(0.03, 0.01, 0.01), smoothstep(0.2,1.,length(pow(abs(uv), vec2(1.)))));
+  color = mix(color, vec3(0.0, 0.0, 0.0), smoothstep(0.2,1.,length(pow(abs(uv), vec2(1.)))));
 
   // turbulence
   // color = vec3(pow(turb,2.)) * vec3(1.0,0.1,0.1) * trail.r;
+
+  // float cell = cellular(vec3(vWPosition.xz, 0.0));
+  // color = vec3(cell);
 
   gl_FragColor = vec4(color,0.3);
 

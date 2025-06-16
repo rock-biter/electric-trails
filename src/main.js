@@ -5,6 +5,7 @@ import {
 	EffectPass,
 	RenderPass,
 	ShaderPass,
+	BloomEffect,
 } from 'postprocessing'
 // __controls_import__
 // __gui_import__
@@ -23,6 +24,8 @@ import godrayVertex from './shaders/godray-pass/vertex.glsl'
 
 import trailMeshVertex from './shaders/mesh-trail/vertex.glsl'
 import trailMeshFragment from './shaders/mesh-trail/fragment.glsl'
+import radialTrailMeshVertex from './shaders/radial-trail/vertex.glsl'
+import radialTrailMeshFragment from './shaders/radial-trail/fragment.glsl'
 
 const textureLoader = new THREE.TextureLoader()
 const crackMap = textureLoader.load('/textures/cracks-1.png')
@@ -41,8 +44,8 @@ const raycaster = new THREE.Raycaster()
 const config = {
 	color: new THREE.Color(0xff3300),
 	colorDistance: 2,
-	sampler: 80,
-	reduce: 0.2,
+	sampler: 30,
+	reduce: 0.5,
 	cursorSize: 1.2,
 }
 const pane = new Pane()
@@ -84,7 +87,7 @@ pane
  * Scene
  */
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(0.03, 0.01, 0.01)
+scene.background = new THREE.Color(0.0, 0.0, 0.0)
 
 /**
  * render sizes
@@ -99,7 +102,7 @@ const sizes = {
  */
 const fov = 60
 const camera = new THREE.PerspectiveCamera(fov, sizes.width / sizes.height, 0.1)
-camera.position.set(4, 8, 8)
+camera.position.set(8, 10, 14)
 camera.lookAt(new THREE.Vector3(0, 2.5, 0))
 
 /**
@@ -221,6 +224,9 @@ window.addEventListener('pointermove', (ev) => {
 	pointer.y = -(ev.clientY / sizes.height) * 2 + 1
 })
 
+const rt3 = createRenderTarget(sizes.width, sizes.height)
+const reflectionCamera = camera.clone()
+
 // ice
 // __floor__
 /**
@@ -237,9 +243,10 @@ const groundMaterial = new THREE.ShaderMaterial({
 		uPerlin: new THREE.Uniform(perlinMap),
 		uParallaxDistance: new THREE.Uniform(1),
 		uTime: trailMaterial.uniforms.uTime,
+		uReflectionMap: new THREE.Uniform(rt3.texture),
 	},
 })
-const groundGeometry = new THREE.PlaneGeometry(40, 40)
+const groundGeometry = new THREE.PlaneGeometry(10000, 10000)
 groundGeometry.rotateX(-Math.PI * 0.5)
 const ground = new THREE.Mesh(groundGeometry, groundMaterial)
 scene.add(ground)
@@ -273,9 +280,22 @@ crackScene.add(crack)
 // smokeMesh.position.y = 0.5
 // scene.add(smokeMesh)
 
-handleResize()
+// function createRenderTarget(mipmap = false) {
+// 	return new THREE.WebGLRenderTarget(sizes.width, sizes.height, {
+// 		type: THREE.HalfFloatType,
+// 		minFilter: THREE.LinearFilter,
+// 		magFilter: THREE.LinearFilter,
+// 		depthBuffer: false,
+// 		generateMipmaps: mipmap,
+// 		depthBuffer: false,
+// 		stencilBuffer: false,
+// 	})
+// }
 
 const composer = new EffectComposer(renderer)
+
+handleResize()
+
 composer.addPass(new RenderPass(scene, camera))
 const resolution = new THREE.Vector2()
 renderer.getDrawingBufferSize(resolution)
@@ -301,7 +321,18 @@ const godrayPassMaterial = new THREE.ShaderMaterial({
 
 const godrayPass = new ShaderPass(godrayPassMaterial, 'tDiffuse')
 
-// composer.addPass(godrayPass)
+composer.addPass(
+	new EffectPass(
+		camera,
+		new BloomEffect({
+			intensity: 1.5,
+			radius: 0.1,
+			luminanceThreshold: 0.005,
+		})
+	)
+)
+
+composer.addPass(godrayPass)
 
 /**
  * Three js Clock
@@ -322,7 +353,7 @@ const dataTexture = new THREE.DataTexture(
 )
 
 // elettric trail mash
-const trailGeom = new THREE.PlaneGeometry(1, 1, 128, 1)
+const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 2)
 // trailGeom.rotateX(-Math.PI * 0.5)
 const trailMat = new THREE.ShaderMaterial({
 	vertexShader: trailMeshVertex,
@@ -335,16 +366,66 @@ const trailMat = new THREE.ShaderMaterial({
 	uniforms: {
 		uTrailTexture: new THREE.Uniform(dataTexture),
 		uTime: new THREE.Uniform(0),
+		uSubdivision: new THREE.Uniform(subdivision),
 	},
 	// map: dataTexture,
 })
 const trail = new THREE.Mesh(trailGeom, trailMat)
-trail.position.y = 1
+trail.position.y = 2
 trail.frustumCulled = false
 trail.renderOrder = 2
 scene.add(trail)
 
 const prevPoint = new THREE.Vector3(0)
+
+// Radial electric mesh
+const trailSubs = 12
+const radialGeom = new THREE.PlaneGeometry(1, 3, trailSubs, 10)
+for (let i = 0; i < 9; i++) {
+	const radialMat = new THREE.ShaderMaterial({
+		vertexShader: radialTrailMeshVertex,
+		fragmentShader: radialTrailMeshFragment,
+		uniforms: {
+			uTrailTexture: new THREE.Uniform(dataTexture),
+			uSubdivision: new THREE.Uniform(16),
+			uTime: trailMat.uniforms.uTime,
+			uCellOffset: { value: new THREE.Vector3(i * 5, 0, i * 5) },
+			uCellScale: new THREE.Uniform(new THREE.Vector3(0.1, 0.2, 0.1)),
+			uStartIndex: new THREE.Uniform(0),
+		},
+		side: THREE.DoubleSide,
+		transparent: true,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false,
+		// wireframe: true,
+	})
+
+	const radialMesh = new THREE.Mesh(radialGeom, radialMat)
+	trail.add(radialMesh)
+}
+
+// for (let i = 0; i < 8; i++) {
+// 	const radialMat = new THREE.ShaderMaterial({
+// 		vertexShader: radialTrailMeshVertex,
+// 		fragmentShader: radialTrailMeshFragment,
+// 		uniforms: {
+// 			uTrailTexture: new THREE.Uniform(dataTexture),
+// 			uSubdivision: new THREE.Uniform(16),
+// 			uTime: trailMat.uniforms.uTime,
+// 			uCellOffset: { value: new THREE.Vector3(i * 5, 0, i * 5) },
+// 			uCellScale: new THREE.Uniform(new THREE.Vector3(0.2, 1, 0.2)),
+// 			uStartIndex: new THREE.Uniform(((i + 1) * subdivision) / 8),
+// 		},
+// 		side: THREE.DoubleSide,
+// 		transparent: true,
+// 		blending: THREE.AdditiveBlending,
+// 		depthWrite: false,
+// 		// wireframe: true,
+// 	})
+
+// 	const radialMesh = new THREE.Mesh(radialGeom, radialMat)
+// 	trail.add(radialMesh)
+// }
 
 /**
  * frame loop
@@ -371,17 +452,17 @@ function tic() {
 		const { uv, point } = firstIntersection
 
 		uv && trailMaterial.uniforms.uUVPointer.value.lerp(uv, dt * 5)
-		godrayPassMaterial.uniforms.uCenter.value.lerp(
-			point.add(new THREE.Vector3(0, -2, 0)),
-			dt * 10
-		)
+		// godrayPassMaterial.uniforms.uCenter.value.lerp(
+		// 	point.add(new THREE.Vector3(0, -2, 0)),
+		// 	dt * 10
+		// )
 
 		const prevPoint = new THREE.Vector3(data[0], data[1], data[2])
 		const newPoint = prevPoint.clone().lerp(point, dt * 5)
 
 		// console.log(point.sub(prevPoint).length())
 		//prevPoint.sub(newPoint).length() >= 0.3
-		if (prevPoint.sub(newPoint).length() >= dt * 1) {
+		if (prevPoint.sub(newPoint).length() >= dt * 0) {
 			// console.log('update')
 			for (let i = subdivision; i >= 0; i--) {
 				let prevIndex = (i - 1) * 4
@@ -423,11 +504,11 @@ function tic() {
 	// renderer.setRenderTarget(smokeOutputRT)
 	// renderer.render(trailSmokeScene, camera)
 
-	renderer.setRenderTarget(rt5)
-	renderer.clear()
-	renderer.render(crackScene, camera)
+	// renderer.setRenderTarget(rt5)
+	// renderer.clear()
+	// renderer.render(crackScene, camera)
 
-	renderer.setRenderTarget(null)
+	// renderer.setRenderTarget(null)
 
 	trailMaterial.uniforms.uMap.value = outputRT.texture
 	groundMaterial.uniforms.uTrailMap.value = inputRT.texture
@@ -438,6 +519,24 @@ function tic() {
 		camera.projectionMatrix
 	)
 	godrayPassMaterial.uniforms.uViewMatrix.value.copy(camera.matrixWorldInverse)
+
+	reflectionCamera.position.copy(camera.position)
+	reflectionCamera.position.y *= -1
+	let target = controls && controls.target.clone()
+	if (!target) {
+		target = cameraTarget
+	}
+	target.y *= -1
+	reflectionCamera.lookAt(target)
+
+	ground.visible = false
+	renderer.setRenderTarget(rt3)
+	renderer.clear()
+
+	renderer.render(scene, reflectionCamera)
+
+	renderer.setRenderTarget(null)
+	ground.visible = true
 
 	// renderer.render(scene, camera)
 	composer.render()
@@ -463,6 +562,8 @@ function handleResize() {
 
 	camera.aspect = sizes.width / sizes.height
 	trailMaterial.uniforms.uResolution.value.set(sizes.width, sizes.height)
+	reflectionCamera.aspect = sizes.width / sizes.height
+
 	// trailSmokeMaterial.uniforms.uResolution.value.set(
 	// 	sizes.width * 0.25,
 	// 	sizes.height * 0.25
@@ -470,14 +571,17 @@ function handleResize() {
 
 	// camera.aspect = sizes.width / sizes.height;
 	camera.updateProjectionMatrix()
+	reflectionCamera.updateProjectionMatrix()
 
+	const pixelRatio = Math.min(window.devicePixelRatio, 2)
 	renderer.setSize(sizes.width, sizes.height)
 	rt1.setSize(sizes.width, sizes.height)
 	rt2.setSize(sizes.width, sizes.height)
 	rt5.setSize(sizes.width, sizes.height)
+	rt3.setSize(sizes.width * pixelRatio, sizes.height * pixelRatio)
+	composer.setSize(sizes.width * pixelRatio, sizes.height * pixelRatio)
 	// rt3.setSize(sizes.width * 0.25, sizes.height * 0.25)
 	// rt4.setSize(sizes.width * 0.25, sizes.height * 0.25)
 
-	const pixelRatio = Math.min(window.devicePixelRatio, 2)
 	renderer.setPixelRatio(pixelRatio)
 }
