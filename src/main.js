@@ -354,12 +354,12 @@ composer.addPass(
 const clock = new THREE.Clock()
 let time = 0
 
-const subdivision = 64
-const data = new Float32Array(subdivision * 4)
+const trailSubdivision = 64
+const data = new Float32Array(trailSubdivision * 4)
 
 const dataTexture = new THREE.DataTexture(
 	data,
-	subdivision,
+	trailSubdivision,
 	1,
 	THREE.RGBAFormat,
 	THREE.FloatType
@@ -374,7 +374,7 @@ const globalUniforms = {
 }
 
 for (let i = 0; i < 2; i++) {
-	const subdivision = 64
+	const subdivision = trailSubdivision
 
 	const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 10)
 	// trailGeom.rotateX(-Math.PI * 0.5)
@@ -461,27 +461,43 @@ for (let i = 0; i < 9; i++) {
 
 // GPGPU particles
 const particlesGeometry = new THREE.BufferGeometry()
-const count = 30000
+const count = 200
 particlesGeometry.setDrawRange(0, count)
 const particlesMaterial = new THREE.ShaderMaterial({
 	vertexShader: /* glsl */ `
 
 	uniform sampler2D uPosition;
 	varying vec2 vUv;
+	varying float vAlpha;
 
 	void main() {
 
-		vec3 pos = texture(uPosition, uv).xyz;
+		vec4 pos = texture(uPosition, uv);
 		vUv = uv;
+		vAlpha = pos.w;
+		vec4 wPos = modelMatrix * vec4(pos.xyz,1.0);
+		vAlpha *= smoothstep(0.,1.,wPos.y);
 
-		gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
-		gl_PointSize = 1.;
+		vec4 mvPos = viewMatrix * wPos;
+
+		gl_Position = projectionMatrix * mvPos;
+		gl_PointSize = 200. / -mvPos.z;
+		gl_PointSize *= pow(pos.w, 5.);
 
 	}
 	`,
 	fragmentShader: /* glsl */ `
+	varying float vAlpha;
 	void main() {
-		gl_FragColor = vec4(0.3,0.7,1.0,1.0);
+
+		vec2 uv = gl_PointCoord.xy;
+		float t = distance(uv, vec2(0.5)) * 2.;
+		float a = smoothstep(1.0,0.0,t);
+		vec3 color = vec3(0.3,0.9, 0.8);
+		color = mix(vec3(0.0,0.0,1.),color,pow(vAlpha, 5.));
+		a = pow(a, 5.0);
+		a *= pow(vAlpha, 4.0);
+		gl_FragColor = vec4(color,a);
 	}
 	`,
 	blending: THREE.AdditiveBlending,
@@ -527,16 +543,16 @@ for (let i = 0; i < gpgpu.count; i++) {
 	V.randomDirection()
 	// V.multiplyScalar(Math.random())
 
-	velocityTexture.image.data[i4 + 0] = V.x
-	velocityTexture.image.data[i4 + 1] = V.y
-	velocityTexture.image.data[i4 + 2] = V.z
+	velocityTexture.image.data[i4 + 0] = 0 //V.x
+	velocityTexture.image.data[i4 + 1] = 3 //V.y
+	velocityTexture.image.data[i4 + 2] = 0 //V.z
 
 	V.multiplyScalar(Math.random() * 5)
 
 	positionTexture.image.data[i4 + 0] = V.x
 	positionTexture.image.data[i4 + 1] = V.y
 	positionTexture.image.data[i4 + 2] = V.z
-	// positionTexture.image.data[i4 + 1] = 1
+	positionTexture.image.data[i4 + 3] = Math.random() * 1
 }
 
 // console.log(velocityTexture.image.data)
@@ -562,6 +578,8 @@ gpgpu.computation.setVariableDependencies(gpgpu.posVar, [
 ])
 
 gpgpu.velVar.material.uniforms.uDt = globalUniforms.uDt
+gpgpu.velVar.material.uniforms.uSubdivision = trailSubdivision
+gpgpu.velVar.material.uniforms.uTrailTexture = new THREE.Uniform(dataTexture)
 gpgpu.posVar.material.uniforms.uDt = globalUniforms.uDt
 gpgpu.posVar.material.uniforms.uTrailTexture = new THREE.Uniform(dataTexture)
 
@@ -609,7 +627,7 @@ function tic() {
 		//prevPoint.sub(newPoint).length() >= 0.3
 		if (prevPoint.sub(newPoint).length() >= dt * 0) {
 			// console.log('update')
-			for (let i = subdivision; i >= 0; i--) {
+			for (let i = trailSubdivision; i >= 0; i--) {
 				let prevIndex = (i - 1) * 4
 
 				const x = data[prevIndex]
