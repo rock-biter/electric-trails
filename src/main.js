@@ -27,6 +27,10 @@ import trailMeshFragment from './shaders/mesh-trail/fragment.glsl'
 import radialTrailMeshVertex from './shaders/radial-trail/vertex.glsl'
 import radialTrailMeshFragment from './shaders/radial-trail/fragment.glsl'
 
+import particlesPosition from './shaders/gpu-particles/position.frag'
+import particlesVelocity from './shaders/gpu-particles/velocity.frag'
+import { GPUComputationRenderer } from 'three/examples/jsm/Addons.js'
+
 const textureLoader = new THREE.TextureLoader()
 const crackMap = textureLoader.load('/textures/cracks-1.png')
 crackMap.wrapS = THREE.RepeatWrapping
@@ -137,10 +141,10 @@ scene.add(ambientLight, directionalLight)
 
 function createRenderTarget(w, h, mipmap = false) {
 	let minFilter, magFilter
+	minFilter = THREE.LinearFilter
+	magFilter = THREE.LinearFilter
 	if (mipmap) {
-		minFilter = magFilter = THREE.LinearMipmapLinearFilter
-	} else {
-		minFilter = magFilter = THREE.LinearFilter
+		minFilter = THREE.LinearMipmapLinearFilter
 	}
 
 	return new THREE.WebGLRenderTarget(w, h, {
@@ -152,15 +156,15 @@ function createRenderTarget(w, h, mipmap = false) {
 	})
 }
 
-const rt1 = createRenderTarget(sizes.width, sizes.height)
-const rt2 = createRenderTarget(sizes.width, sizes.height)
+const rt1 = createRenderTarget(sizes.width, sizes.height, false)
+const rt2 = createRenderTarget(sizes.width, sizes.height, false)
 
 let inputRT = rt1
 let outputRT = rt2
 
 // const rt3 = createRenderTarget(sizes.width * 0.25, sizes.height * 0.25)
 // const rt4 = createRenderTarget(sizes.width * 0.25, sizes.height * 0.25)
-const rt5 = createRenderTarget(sizes.width, sizes.height)
+const rt5 = createRenderTarget(sizes.width, sizes.height, false)
 
 // let smokeInputRT = rt3
 // let smokeOutputRT = rt4
@@ -455,6 +459,114 @@ for (let i = 0; i < 9; i++) {
 // 	trail.add(radialMesh)
 // }
 
+// GPGPU particles
+const particlesGeometry = new THREE.BufferGeometry()
+const count = 30000
+particlesGeometry.setDrawRange(0, count)
+const particlesMaterial = new THREE.ShaderMaterial({
+	vertexShader: /* glsl */ `
+
+	uniform sampler2D uPosition;
+	varying vec2 vUv;
+
+	void main() {
+
+		vec3 pos = texture(uPosition, uv).xyz;
+		vUv = uv;
+
+		gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
+		gl_PointSize = 1.;
+
+	}
+	`,
+	fragmentShader: /* glsl */ `
+	void main() {
+		gl_FragColor = vec4(0.3,0.7,1.0,1.0);
+	}
+	`,
+	blending: THREE.AdditiveBlending,
+	transparent: true,
+	depthWrite: false,
+	uniforms: {
+		uPosition: new THREE.Uniform(),
+	},
+})
+
+const particles = new THREE.Points(particlesGeometry, particlesMaterial)
+scene.add(particles)
+
+const gpgpu = {}
+gpgpu.count = count
+gpgpu.size = Math.ceil(Math.sqrt(gpgpu.count))
+gpgpu.computation = new GPUComputationRenderer(gpgpu.size, gpgpu.size, renderer)
+
+const positionTexture = gpgpu.computation.createTexture()
+const velocityTexture = gpgpu.computation.createTexture()
+
+const uv = new Float32Array(count * 2)
+
+for (let y = 0; y < gpgpu.size; y++) {
+	for (let x = 0; x < gpgpu.size; x++) {
+		const i = y * gpgpu.size + x
+		const i2 = i * 2
+
+		const uvX = (x + 0.5) / gpgpu.size
+		const uvY = (y + 0.5) / gpgpu.size
+
+		uv[i2 + 0] = uvX
+		uv[i2 + 1] = uvY
+	}
+}
+particlesGeometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+
+for (let i = 0; i < gpgpu.count; i++) {
+	const i4 = i * 4
+	const i3 = i * 3
+
+	const V = new THREE.Vector3()
+	V.randomDirection()
+	// V.multiplyScalar(Math.random())
+
+	velocityTexture.image.data[i4 + 0] = V.x
+	velocityTexture.image.data[i4 + 1] = V.y
+	velocityTexture.image.data[i4 + 2] = V.z
+
+	V.multiplyScalar(Math.random() * 5)
+
+	positionTexture.image.data[i4 + 0] = V.x
+	positionTexture.image.data[i4 + 1] = V.y
+	positionTexture.image.data[i4 + 2] = V.z
+	// positionTexture.image.data[i4 + 1] = 1
+}
+
+// console.log(velocityTexture.image.data)
+
+gpgpu.velVar = gpgpu.computation.addVariable(
+	'uVelocity',
+	particlesVelocity,
+	velocityTexture
+)
+gpgpu.posVar = gpgpu.computation.addVariable(
+	'uPosition',
+	particlesPosition,
+	positionTexture
+)
+
+gpgpu.computation.setVariableDependencies(gpgpu.velVar, [
+	gpgpu.velVar,
+	gpgpu.posVar,
+])
+gpgpu.computation.setVariableDependencies(gpgpu.posVar, [
+	gpgpu.velVar,
+	gpgpu.posVar,
+])
+
+gpgpu.velVar.material.uniforms.uDt = globalUniforms.uDt
+gpgpu.posVar.material.uniforms.uDt = globalUniforms.uDt
+gpgpu.posVar.material.uniforms.uTrailTexture = new THREE.Uniform(dataTexture)
+
+gpgpu.computation.init()
+
 /**
  * frame loop
  */
@@ -469,6 +581,10 @@ function tic() {
 	 * tempo totale trascorso dall'inizio
 	 */
 	// const time = clock.getElapsedTime()
+
+	gpgpu.computation.compute()
+	particlesMaterial.uniforms.uPosition.value =
+		gpgpu.computation.getCurrentRenderTarget(gpgpu.posVar).texture
 
 	raycaster.setFromCamera(pointer, camera)
 
