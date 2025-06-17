@@ -110,7 +110,7 @@ void main() {
   
   vec3 color = cracksColor; // + turbulence * 0.25;//+ pow(deepColor,vec3(2.));
   // color = mix(color, turbulence * 0.5, pow(accumulateFrosted,1.));
-  color += reflection * 3. + light * 4. * vec3(0.3, 1., 0.7);
+  color += reflection * 3. + light * 4. * vec3(0.3, 0.8, 0.99);
 
   vec2 uv = vUv - 0.5;
   uv *= 2.0;

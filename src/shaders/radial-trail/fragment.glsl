@@ -10,7 +10,8 @@ void main() {
   a = pow(a, 10.0);
   vec3 color = vec3(0.2,0.4,0.95);
   vec3 colorB = vec3(0.1,0.8, 0.98);
-  color = mix(color, colorB, vUv.x);
+  vec3 colorC = vec3(0.0,0.0,1.0);
+  color = mix(color, colorC, smoothstep(0.2, 1., vUv.x));
   color = mix(color,colorB, m);
   color = mix(color,vec3(1.), pow(m,3.));
 
