@@ -372,7 +372,7 @@ const globalUniforms = {
 for (let i = 0; i < 2; i++) {
 	const subdivision = 64
 
-	const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 2)
+	const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 10)
 	// trailGeom.rotateX(-Math.PI * 0.5)
 	const trailMat = new THREE.ShaderMaterial({
 		vertexShader: trailMeshVertex,
@@ -408,7 +408,7 @@ const prevPoint = new THREE.Vector3(0)
 
 // Radial electric mesh
 const trailSubs = 12
-const radialGeom = new THREE.PlaneGeometry(1, 3, trailSubs, 10)
+const radialGeom = new THREE.PlaneGeometry(1, 3, trailSubs, 60)
 for (let i = 0; i < 9; i++) {
 	const radialMat = new THREE.ShaderMaterial({
 		vertexShader: radialTrailMeshVertex,
