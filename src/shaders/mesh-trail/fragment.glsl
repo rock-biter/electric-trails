@@ -20,7 +20,7 @@ void main() {
   color -= random(gl_FragCoord.xy) * 0.3;
 
   // a *= 1. - vUv.x;
-  a *= smoothstep(max(0.2,1. - uDt * 40.), 0., vUv.x);
+  a *= smoothstep(max(0.2,1. - uDt * 35.), 0., vUv.x);
   // a = max(a,0.2);
   // a *= smoothstep(0.5, 0.1, t);
   gl_FragColor = vec4(color,a);
