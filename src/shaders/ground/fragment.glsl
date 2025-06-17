@@ -1,3 +1,4 @@
+#include ../random.glsl;
 #include ../noise.glsl;
 #include ../perlin.glsl;
 #include ../simplex.glsl;
@@ -23,22 +24,32 @@ void main() {
   );
 
   ivec2 iRes = textureSize(uReflectionMap, 0);
-  vec2 reflectUV = gl_FragCoord.xy / (vec2(iRes));
+  vec2 reflectUV = gl_FragCoord.xy / (vec2(iRes) * 2.);
   reflectUV.y = 1.0 - reflectUV.y;
   reflectUV += noiseUV * 0.04;
 
   vec3 reflection = texture( uReflectionMap, reflectUV ).rgb;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.001) ).rgb;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.,0.001)).rgb;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.002)).rgb * 0.5;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.00,0.002)).rgb * 0.5;
-  reflection += texture( uReflectionMap, reflectUV + vec2(-0.001,-0.00)).rgb;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.001,-0.00)).rgb;
-  reflection += texture( uReflectionMap, reflectUV + vec2(0.002,-0.00)).rgb * 0.5;
-  reflection += texture( uReflectionMap, reflectUV + vec2(-0.002,-0.00)).rgb * 0.5;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.001) ).rgb;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.,0.001)).rgb;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.,-0.002)).rgb * 0.5;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.00,0.002)).rgb * 0.5;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(-0.001,-0.00)).rgb;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.001,-0.00)).rgb;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(0.002,-0.00)).rgb * 0.5;
+  // reflection += texture( uReflectionMap, reflectUV + vec2(-0.002,-0.00)).rgb * 0.5;
 
-  reflection /= 8.;
+  // reflection /= 8.;
+  // vec3 light = pow(reflection, vec3(0.25));
   reflection = pow(reflection, vec3(2.));
+
+  // vec3 light = textureLod(uReflectionMap, reflectUV, 6.).rgb;
+  vec3 light = textureLod(uReflectionMap, reflectUV, 5.).rgb;
+  light += textureLod(uReflectionMap, reflectUV, 6.).rgb;
+  light += textureLod(uReflectionMap, reflectUV, 4.).rgb;
+  // light += textureLod(uReflectionMap, reflectUV, 2.).rgb;
+
+  light /= 3.;
+
 
   float perlin = texture(uPerlin, vUv * 2.).r;
   float perlinAnim = texture(uPerlin, vUv * 2. + uTime * 0.02).r * 2. - 1.;
@@ -99,7 +110,7 @@ void main() {
   
   vec3 color = cracksColor; // + turbulence * 0.25;//+ pow(deepColor,vec3(2.));
   // color = mix(color, turbulence * 0.5, pow(accumulateFrosted,1.));
-  color += reflection;
+  color += reflection * 3. + light * 4. * vec3(0.3, 1., 0.7);
 
   vec2 uv = vUv - 0.5;
   uv *= 2.0;
@@ -110,6 +121,8 @@ void main() {
 
   // float cell = cellular(vec3(vWPosition.xz, 0.0));
   // color = vec3(cell);
+  // color * 1.2;
+  color -= random(gl_FragCoord.xy) * 0.5 * color;
 
   gl_FragColor = vec4(color,0.3);
 

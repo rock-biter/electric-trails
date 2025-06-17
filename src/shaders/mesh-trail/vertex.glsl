@@ -7,6 +7,8 @@
 uniform sampler2D uTrailTexture;
 uniform float uTime;
 uniform float uSubdivision;
+uniform vec3 uOffset;
+uniform float uScale;
 
 varying vec2 vUv;
 
@@ -36,10 +38,10 @@ void main() {
   pos += c;
   // pos += vec3(position.x, 0., position.z);
 
-  pos.y += 2. * (cnoise(c * 0.1 )) * smoothstep(0.,0.2,vUv.x);
-  pos.y += 0.5 * (cnoise(c * 1. + 50. + uTime * 0.5)) * smoothstep(0.,0.2,vUv.x);
-  pos.x += length(diff) * (random(c * 1. + 100.) * 2. -1.);
-  pos.z += length(diff) * (random(c * 1.  + 200.) * 2. + -1.);
+  pos.y += uScale * 2. * (cnoise(c * 0.1 + uOffset )) * smoothstep(0.,0.2,vUv.x);
+  pos.y += uScale * 0.5 * (cnoise(c * 1. + uOffset + 50. + uTime * 0.5)) * smoothstep(0.,0.2,vUv.x);
+  pos.x += uScale * length(diff) * (random(c * 1. + uOffset + 100.) * 2. -1.);
+  pos.z += uScale * length(diff) * (random(c * 1. + uOffset  + 200.) * 2. + -1.);
   // pos.y += 1. * (random(c * 1.  + 200.) * 0.5 + 0.5);
 
 

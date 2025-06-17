@@ -48,7 +48,7 @@ const config = {
 	reduce: 0.5,
 	cursorSize: 1.2,
 }
-const pane = new Pane()
+// const pane = new Pane()
 // pane.addBinding(config, 'color', {
 // 	color: { type: 'float' },
 // })
@@ -63,25 +63,25 @@ const pane = new Pane()
 // 		godrayPassMaterial.uniforms.uColorDistance.value = ev.value
 // 	})
 
-pane
-	.addBinding(config, 'reduce', {
-		min: 0.01,
-		max: 1,
-		step: 0.001,
-	})
-	.on('change', (ev) => {
-		godrayPassMaterial.uniforms.uReduce.value = ev.value
-	})
+// pane
+// 	.addBinding(config, 'reduce', {
+// 		min: 0.01,
+// 		max: 1,
+// 		step: 0.001,
+// 	})
+// 	.on('change', (ev) => {
+// 		godrayPassMaterial.uniforms.uReduce.value = ev.value
+// 	})
 
-pane
-	.addBinding(config, 'sampler', {
-		min: 0,
-		max: 160,
-		step: 1,
-	})
-	.on('change', (ev) => {
-		godrayPassMaterial.uniforms.uSampler.value = ev.value
-	})
+// pane
+// 	.addBinding(config, 'sampler', {
+// 		min: 0,
+// 		max: 160,
+// 		step: 1,
+// 	})
+// 	.on('change', (ev) => {
+// 		godrayPassMaterial.uniforms.uSampler.value = ev.value
+// 	})
 
 /**
  * Scene
@@ -135,12 +135,20 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 4.5)
 directionalLight.position.set(3, 10, 7)
 scene.add(ambientLight, directionalLight)
 
-function createRenderTarget(w, h) {
+function createRenderTarget(w, h, mipmap = false) {
+	let minFilter, magFilter
+	if (mipmap) {
+		minFilter = magFilter = THREE.LinearMipmapLinearFilter
+	} else {
+		minFilter = magFilter = THREE.LinearFilter
+	}
+
 	return new THREE.WebGLRenderTarget(w, h, {
 		type: THREE.HalfFloatType,
-		minFilter: THREE.LinearFilter,
-		magFilter: THREE.LinearFilter,
+		minFilter,
+		magFilter,
 		depthBuffer: false,
+		generateMipmaps: mipmap,
 	})
 }
 
@@ -224,7 +232,8 @@ window.addEventListener('pointermove', (ev) => {
 	pointer.y = -(ev.clientY / sizes.height) * 2 + 1
 })
 
-const rt3 = createRenderTarget(sizes.width, sizes.height)
+const rt3 = createRenderTarget(sizes.width, sizes.height, true)
+// rt3.generateMipMaps = true
 const reflectionCamera = camera.clone()
 
 // ice
@@ -332,7 +341,7 @@ composer.addPass(
 	)
 )
 
-composer.addPass(godrayPass)
+// composer.addPass(godrayPass)
 
 /**
  * Three js Clock
@@ -353,28 +362,47 @@ const dataTexture = new THREE.DataTexture(
 )
 
 // elettric trail mash
-const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 2)
-// trailGeom.rotateX(-Math.PI * 0.5)
-const trailMat = new THREE.ShaderMaterial({
-	vertexShader: trailMeshVertex,
-	fragmentShader: trailMeshFragment,
-	transparent: true,
-	// wireframe: true,
-	side: THREE.DoubleSide,
-	blending: THREE.AdditiveBlending,
-	depthWrite: false,
-	uniforms: {
-		uTrailTexture: new THREE.Uniform(dataTexture),
-		uTime: new THREE.Uniform(0),
-		uSubdivision: new THREE.Uniform(subdivision),
-	},
-	// map: dataTexture,
-})
-const trail = new THREE.Mesh(trailGeom, trailMat)
-trail.position.y = 2
-trail.frustumCulled = false
-trail.renderOrder = 2
-scene.add(trail)
+const trailGroup = new THREE.Object3D()
+
+const globalUniforms = {
+	uTime: new THREE.Uniform(0),
+	uDt: new THREE.Uniform(0),
+}
+
+for (let i = 0; i < 2; i++) {
+	const subdivision = 64
+
+	const trailGeom = new THREE.PlaneGeometry(1, 0.75, subdivision, 2)
+	// trailGeom.rotateX(-Math.PI * 0.5)
+	const trailMat = new THREE.ShaderMaterial({
+		vertexShader: trailMeshVertex,
+		fragmentShader: trailMeshFragment,
+		transparent: true,
+		wireframe: true,
+		side: THREE.DoubleSide,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false,
+		uniforms: {
+			uTrailTexture: new THREE.Uniform(dataTexture),
+			uTime: globalUniforms.uTime,
+			uSubdivision: new THREE.Uniform(subdivision),
+			uScale: new THREE.Uniform(1 - 0.2 * i),
+			uOffset: new THREE.Uniform(
+				new THREE.Vector3(i * 24.356, i * 24.356, i * 24.356)
+			),
+			uDt: globalUniforms.uDt,
+		},
+		// map: dataTexture,
+	})
+	const trail = new THREE.Mesh(trailGeom, trailMat)
+
+	trailGroup.add(trail)
+}
+
+trailGroup.position.y = 2
+trailGroup.frustumCulled = false
+trailGroup.renderOrder = 2
+scene.add(trailGroup)
 
 const prevPoint = new THREE.Vector3(0)
 
@@ -388,7 +416,7 @@ for (let i = 0; i < 9; i++) {
 		uniforms: {
 			uTrailTexture: new THREE.Uniform(dataTexture),
 			uSubdivision: new THREE.Uniform(16),
-			uTime: trailMat.uniforms.uTime,
+			uTime: globalUniforms.uTime,
 			uCellOffset: { value: new THREE.Vector3(i * 5, 0, i * 5) },
 			uCellScale: new THREE.Uniform(new THREE.Vector3(0.1, 0.2, 0.1)),
 			uStartIndex: new THREE.Uniform(0),
@@ -397,11 +425,11 @@ for (let i = 0; i < 9; i++) {
 		transparent: true,
 		blending: THREE.AdditiveBlending,
 		depthWrite: false,
-		// wireframe: true,
+		wireframe: true,
 	})
 
 	const radialMesh = new THREE.Mesh(radialGeom, radialMat)
-	trail.add(radialMesh)
+	trailGroup.add(radialMesh)
 }
 
 // for (let i = 0; i < 8; i++) {
@@ -436,6 +464,7 @@ function tic() {
 	 */
 	const dt = clock.getDelta()
 	time += dt
+	globalUniforms.uDt.value = dt
 	/**
 	 * tempo totale trascorso dall'inizio
 	 */
@@ -445,7 +474,7 @@ function tic() {
 
 	const [firstIntersection] = raycaster.intersectObject(ground)
 
-	trailMat.uniforms.uTime.value = time
+	globalUniforms.uTime.value = time
 
 	if (firstIntersection) {
 		// console.log(firstIntersection)
@@ -535,6 +564,11 @@ function tic() {
 
 	renderer.render(scene, reflectionCamera)
 
+	// rt3.texture.mi
+	// const gl = renderer.getContext()
+	// gl.bindTexture(gl.TEXTURE_2D, rt3.texture.__webglTexture)
+	// gl.generateMipmap(gl.TEXTURE_2D)
+
 	renderer.setRenderTarget(null)
 	ground.visible = true
 
@@ -578,7 +612,7 @@ function handleResize() {
 	rt1.setSize(sizes.width, sizes.height)
 	rt2.setSize(sizes.width, sizes.height)
 	rt5.setSize(sizes.width, sizes.height)
-	rt3.setSize(sizes.width * pixelRatio, sizes.height * pixelRatio)
+	rt3.setSize(sizes.width * pixelRatio * 0.5, sizes.height * pixelRatio * 0.5)
 	composer.setSize(sizes.width * pixelRatio, sizes.height * pixelRatio)
 	// rt3.setSize(sizes.width * 0.25, sizes.height * 0.25)
 	// rt4.setSize(sizes.width * 0.25, sizes.height * 0.25)
