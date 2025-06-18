@@ -29,6 +29,8 @@ import radialTrailMeshFragment from './shaders/radial-trail/fragment.glsl'
 
 import particlesPosition from './shaders/gpu-particles/position.frag'
 import particlesVelocity from './shaders/gpu-particles/velocity.frag'
+import particlesVertex from './shaders/gpu-particles/vertex.glsl'
+import particlesFragment from './shaders/gpu-particles/fragment.glsl'
 import { GPUComputationRenderer } from 'three/examples/jsm/Addons.js'
 
 const textureLoader = new THREE.TextureLoader()
@@ -461,54 +463,24 @@ for (let i = 0; i < 9; i++) {
 
 // GPGPU particles
 const particlesGeometry = new THREE.BufferGeometry()
-const count = 200
+const count = 10000
 particlesGeometry.setDrawRange(0, count)
 const particlesMaterial = new THREE.ShaderMaterial({
-	vertexShader: /* glsl */ `
-
-	uniform sampler2D uPosition;
-	varying vec2 vUv;
-	varying float vAlpha;
-
-	void main() {
-
-		vec4 pos = texture(uPosition, uv);
-		vUv = uv;
-		vAlpha = pos.w;
-		vec4 wPos = modelMatrix * vec4(pos.xyz,1.0);
-		vAlpha *= smoothstep(0.,1.,wPos.y);
-
-		vec4 mvPos = viewMatrix * wPos;
-
-		gl_Position = projectionMatrix * mvPos;
-		gl_PointSize = 200. / -mvPos.z;
-		gl_PointSize *= pow(pos.w, 5.);
-
-	}
-	`,
-	fragmentShader: /* glsl */ `
-	varying float vAlpha;
-	void main() {
-
-		vec2 uv = gl_PointCoord.xy;
-		float t = distance(uv, vec2(0.5)) * 2.;
-		float a = smoothstep(1.0,0.0,t);
-		vec3 color = vec3(0.3,0.9, 0.8);
-		color = mix(vec3(0.0,0.0,1.),color,pow(vAlpha, 5.));
-		a = pow(a, 5.0);
-		a *= pow(vAlpha, 4.0);
-		gl_FragColor = vec4(color,a);
-	}
-	`,
+	vertexShader: particlesVertex,
+	fragmentShader: particlesFragment,
 	blending: THREE.AdditiveBlending,
 	transparent: true,
 	depthWrite: false,
 	uniforms: {
 		uPosition: new THREE.Uniform(),
+		uTrailTexture: new THREE.Uniform(dataTexture),
+		uSubdivision: new THREE.Uniform(trailSubdivision),
+		uTime: globalUniforms.uTime,
 	},
 })
 
 const particles = new THREE.Points(particlesGeometry, particlesMaterial)
+particles.frustumCulled = false
 scene.add(particles)
 
 const gpgpu = {}
@@ -517,6 +489,7 @@ gpgpu.size = Math.ceil(Math.sqrt(gpgpu.count))
 gpgpu.computation = new GPUComputationRenderer(gpgpu.size, gpgpu.size, renderer)
 
 const positionTexture = gpgpu.computation.createTexture()
+const originalPositionTexture = gpgpu.computation.createTexture()
 const velocityTexture = gpgpu.computation.createTexture()
 
 const uv = new Float32Array(count * 2)
@@ -543,19 +516,27 @@ for (let i = 0; i < gpgpu.count; i++) {
 	V.randomDirection()
 	// V.multiplyScalar(Math.random())
 
-	velocityTexture.image.data[i4 + 0] = 0 //V.x
-	velocityTexture.image.data[i4 + 1] = 3 //V.y
-	velocityTexture.image.data[i4 + 2] = 0 //V.z
+	velocityTexture.image.data[i4 + 0] = V.x
+	velocityTexture.image.data[i4 + 1] = V.y
+	velocityTexture.image.data[i4 + 2] = V.z
 
-	V.multiplyScalar(Math.random() * 5)
+	V.multiplyScalar(Math.random() * 50)
 
+	const y = Math.random() * 3 + 1
+
+	originalPositionTexture.image.data[i4 + 0] = V.x
 	positionTexture.image.data[i4 + 0] = V.x
-	positionTexture.image.data[i4 + 1] = V.y
+	originalPositionTexture.image.data[i4 + 1] = y
+	positionTexture.image.data[i4 + 1] = y
+	originalPositionTexture.image.data[i4 + 2] = V.z
 	positionTexture.image.data[i4 + 2] = V.z
-	positionTexture.image.data[i4 + 3] = Math.random() * 1
+	// originalPositionTexture.image.data[i4 + 3] = Math.random()
+	positionTexture.image.data[i4 + 3] = Math.random()
 }
 
-// console.log(velocityTexture.image.data)
+// originalPositionTexture.needsUpdate = true
+
+console.log(positionTexture.image.data)
 
 gpgpu.velVar = gpgpu.computation.addVariable(
 	'uVelocity',
@@ -582,6 +563,9 @@ gpgpu.velVar.material.uniforms.uSubdivision = trailSubdivision
 gpgpu.velVar.material.uniforms.uTrailTexture = new THREE.Uniform(dataTexture)
 gpgpu.posVar.material.uniforms.uDt = globalUniforms.uDt
 gpgpu.posVar.material.uniforms.uTrailTexture = new THREE.Uniform(dataTexture)
+gpgpu.posVar.material.uniforms.uOriginalPositionTexture = new THREE.Uniform(
+	originalPositionTexture
+)
 
 gpgpu.computation.init()
 
