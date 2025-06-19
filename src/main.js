@@ -463,7 +463,7 @@ for (let i = 0; i < 9; i++) {
 
 // GPGPU particles
 const particlesGeometry = new THREE.BufferGeometry()
-const count = 10000
+const count = 20000
 particlesGeometry.setDrawRange(0, count)
 const particlesMaterial = new THREE.ShaderMaterial({
 	vertexShader: particlesVertex,
@@ -481,7 +481,7 @@ const particlesMaterial = new THREE.ShaderMaterial({
 
 const particles = new THREE.Points(particlesGeometry, particlesMaterial)
 particles.frustumCulled = false
-scene.add(particles)
+// scene.add(particles)
 
 const gpgpu = {}
 gpgpu.count = count
@@ -569,6 +569,91 @@ gpgpu.posVar.material.uniforms.uOriginalPositionTexture = new THREE.Uniform(
 
 gpgpu.computation.init()
 
+// instanced mesh
+// Create sphere geometry and material
+const sphereGeometry = new THREE.SphereGeometry(0.05, 6, 4)
+const instMaterial = new THREE.ShaderMaterial({
+	vertexShader: /* glsl */ ` 
+	uniform float uDt;
+	uniform float uSubdivision;
+	uniform float uTexSize;
+	uniform sampler2D uTrailTexture;
+	uniform sampler2D uPosition;
+	uniform sampler2D uOriginalPositionTexture;
+
+	varying vec3 vNormal;
+
+	void main() {
+
+		vec4 pos = vec4(position,1.0);
+		vNormal = normal;
+		// pos = instanceMatrix * pos;
+
+		vec2 uvPos = vec2(0);
+		uvPos.x = instanceMatrix[3][0];
+		uvPos.y = instanceMatrix[3][1];
+
+		// vec2 uv3 = vec2(
+		// 	float(mod(float(gl_InstanceID) , uTexSize)) / uTexSize, 
+  	// 	float(floor(float(gl_InstanceID) / uTexSize)) / uTexSize
+		// );
+
+		vec4 posP = texture(uPosition, uvPos);
+
+		pos.xyz += posP.xyz;
+
+		gl_Position = projectionMatrix * modelViewMatrix * pos;
+	}
+	`,
+	fragmentShader: /* glsl */ `
+	varying vec3 vNormal;
+	void main() {
+
+		vec3 normal = normalize(vNormal);
+
+		vec3 color = vec3(0.2,0.8,1.);
+
+		gl_FragColor = vec4(normal,1.);
+	}
+	`,
+	// color: 0xff0000,
+	uniforms: {
+		uPosition: new THREE.Uniform(),
+		uTrailTexture: new THREE.Uniform(dataTexture),
+		uSubdivision: new THREE.Uniform(trailSubdivision),
+		uTime: globalUniforms.uTime,
+		uTexSize: new THREE.Uniform(gpgpu.size),
+	},
+})
+
+// Create instanced mesh
+const COUNT = count
+const mesh = new THREE.InstancedMesh(sphereGeometry, instMaterial, COUNT)
+
+// Create matrix for position and rotation
+const matrix = new THREE.Matrix4()
+
+// Position spheres randomly
+for (let i = 0; i < COUNT; i++) {
+	const uvX = i % gpgpu.size
+	const uvY = Math.floor(i / gpgpu.size)
+
+	const position = new THREE.Vector3(
+		(uvX + 0.5) / gpgpu.size, // x
+		(uvY + 0.5) / gpgpu.size, // y
+		0 // z
+	)
+
+	const rotation = new THREE.Quaternion()
+	const scale = new THREE.Vector3(1, 1, 1)
+
+	matrix.compose(position, rotation, scale)
+	// matrix.
+	mesh.setMatrixAt(i, matrix)
+}
+
+scene.add(mesh)
+
 /**
  * frame loop
  */
@@ -587,6 +672,8 @@ function tic() {
 	gpgpu.computation.compute()
 	particlesMaterial.uniforms.uPosition.value =
 		gpgpu.computation.getCurrentRenderTarget(gpgpu.posVar).texture
+	instMaterial.uniforms.uPosition.value =
+		particlesMaterial.uniforms.uPosition.value
 
 	raycaster.setFromCamera(pointer, camera)
 
